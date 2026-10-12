@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>پرتال ساخت آهنگ</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1d1b20;--mut:#6b6670;--line:#e2ded6;--acc:#6c47ff;--on:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141318;--card:#1f1d25;--ink:#f1eef7;--mut:#a39eb0;--line:#34303d;--acc:#8e72ff;--on:#12101a}}
+:root[data-theme="dark"]{--bg:#141318;--card:#1f1d25;--ink:#f1eef7;--mut:#a39eb0;--line:#34303d;--acc:#8e72ff;--on:#12101a}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}
+main{max-width:640px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:22px;margin:4px 0 2px}.sub{color:var(--mut);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input[type=text],input[type=password],textarea,select{width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+.row{display:flex;gap:10px}.row>div{flex:1}
+.chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:15px;color:var(--ink)}
+button,.btn{font:inherit;border:0;border-radius:12px;padding:11px 16px;background:var(--acc);color:var(--on);cursor:pointer;text-decoration:none;display:inline-block}
+button.alt,.btn.alt{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+button:disabled{opacity:.5}#go{width:100%;margin-top:14px;font-size:17px}
+.msg{color:var(--mut);font-size:14px;margin:8px 0}.err{color:#d23b3b;white-space:pre-wrap;word-break:break-word}
+canvas{width:100%;aspect-ratio:1;border-radius:14px;display:block}
+audio{width:100%;margin:12px 0 8px}.acts{display:flex;gap:10px;flex-wrap:wrap}
+details{margin-top:10px;font-size:14px}pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);padding:10px;border-radius:10px}
+a.l{color:var(--acc)}
+</style>
+</head>
+<body>
+<main>
+<h1>🎧 پرتال ساخت آهنگ</h1>
+<p class="sub">ترانه و سبک رو از «استودیوی ترانه» بفرست اینجا، یا خودت بنویس. آهنگ همین‌جا ساخته می‌شه.</p>
+
+<div class="card">
+  <label for="key">کلید API رایگان ACE Music <a class="l" href="https://acemusic.ai/playground/api-key" target="_blank" rel="noopener">(گرفتن کلید)</a></label>
+  <input id="key" type="password" dir="ltr" autocomplete="off" placeholder="فقط توی مرورگر خودت ذخیره می‌شه">
+</div>
+
+<div class="card">
+  <label for="title">عنوان</label><input id="title" type="text" dir="auto">
+  <label for="style">سبک (Style) یا ایده</label><textarea id="style" rows="3" dir="auto" placeholder="Soft emotional pop ballad, female vocals, piano…"></textarea>
+  <label for="lyrics">ترانه (اختیاری؛ اگه خالی بذاری هوش مصنوعی خودش می‌نویسه)</label><textarea id="lyrics" rows="8" dir="auto"></textarea>
+  <div class="row">
+    <div><label for="lang">زبان خواننده</label><select id="lang">
+      <option value="en">انگلیسی</option><option value="fa">فارسی</option><option value="ar">عربی</option><option value="tr">ترکی</option>
+      <option value="es">اسپانیایی</option><option value="fr">فرانسوی</option><option value="ko">کره‌ای</option><option value="ja">ژاپنی</option><option value="zh">چینی</option></select></div>
+    <div><label for="dur">طول</label><select id="dur"><option value="30">۳۰ ثانیه</option><option value="60">۱ دقیقه</option><option value="120" selected>۲ دقیقه</option><option value="180">۳ دقیقه</option><option value="240">۴ دقیقه</option></select></div>
+  </div>
+  <label class="chk"><input type="checkbox" id="inst"> بدون کلام (instrumental)</label>
+  <button id="go">ساخت آهنگ</button>
+  <div id="msg" class="msg" aria-live="polite"></div>
+</div>
+
+<div id="out" class="card" hidden>
+  <canvas id="cover" width="1024" height="1024"></canvas>
+  <audio id="player" controls></audio>
+  <div class="acts"><a id="dlmp3" class="btn">دانلود MP3</a><button id="dlcover" class="alt">دانلود کاور</button></div>
+  <details id="info" hidden><summary>متن برگشتی از مدل</summary><pre id="infotxt"></pre></details>
+</div>
+</main>
+<script>
+const API = "https://api.acemusic.ai/v1/chat/completions", MODEL = "acemusic/acestep-v15-turbo";
+const $ = s => document.querySelector(s);
+const CODES = { "English": "en", "Persian (Farsi)": "fa", "Arabic": "ar", "Turkish": "tr", "Spanish": "es", "French": "fr", "Korean": "ko", "Japanese": "ja" };
+let svgUri = null, timer = null;
+const msg = (t, err) => { $("#msg").className = err ? "msg err" : "msg"; $("#msg").textContent = t; };
+try { $("#key").value = localStorage.getItem("ace_key") || ""; } catch (e) {}
+
+async function unpack(s) {
+  const b = s.slice(2).replace(/-/g, "+").replace(/_/g, "/");
+  let bytes = Uint8Array.from(atob(b), c => c.charCodeAt(0));
+  if (s.startsWith("z.")) bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+(async () => {
+  if (!location.hash.startsWith("#d=")) return;
+  try {
+    const o = await unpack(location.hash.slice(3));
+    $("#title").value = o.title || ""; $("#style").value = o.style || ""; $("#lyrics").value = o.lyrics || "";
+    if (o.lang) $("#lang").value = CODES[o.lang] || o.lang;
+    if (o.mins) $("#dur").value = String(Math.min(o.mins, 4) * 60);
+    $("#inst").checked = !!o.inst;
+    if (o.svg) svgUri = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(o.svg);
+    history.replaceState(null, "", location.pathname);
+    msg("✓ اطلاعات از استودیو اومد؛ فقط «ساخت آهنگ» رو بزن.");
+  } catch (e) { msg("اطلاعات ارسالی خونده نشد؛ دستی وارد کن.", true); }
+})();
+
+function procCover(seed) {
+  let h = 7; for (const c of seed || "x") h = (h * 31 + c.charCodeAt(0)) | 0;
+  const rnd = () => { h = (h * 1664525 + 1013904223) | 0; return (h >>> 0) / 4294967296; };
+  const cv = $("#cover"), g = cv.getContext("2d"), hue = Math.floor(rnd() * 360);
+  const lg = g.createLinearGradient(0, 0, 0, 1024);
+  lg.addColorStop(0, `hsl(${hue},60%,16%)`); lg.addColorStop(1, `hsl(${(hue + 50) % 360},75%,52%)`);
+  g.fillStyle = lg; g.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 7; i++) {
+    const x = rnd() * 1024, y = rnd() * 1024, r = 120 + rnd() * 300, hh = (hue + rnd() * 120) % 360;
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, `hsla(${hh},90%,65%,.55)`); rg.addColorStop(1, `hsla(${hh},90%,65%,0)`);
+    g.fillStyle = rg; g.fillRect(0, 0, 1024, 1024);
+  }
+}
+async function drawCover(seed) {
+  if (svgUri) {
+    try { const im = new Image(); im.src = svgUri; await im.decode(); $("#cover").getContext("2d").drawImage(im, 0, 0, 1024, 1024); return; } catch (e) {}
+  }
+  procCover(seed);
+}
+
+$("#go").onclick = async () => {
+  const key = $("#key").value.trim(), style = $("#style").value.trim(), lyrics = $("#lyrics").value.trim(), inst = $("#inst").checked;
+  if (!key) return msg("اول کلید API رو وارد کن.", true);
+  if (!style && !lyrics) return msg("سبک یا ایده رو بنویس.", true);
+  try { localStorage.setItem("ace_key", key); } catch (e) {}
+  const body = { model: MODEL, stream: false, thinking: true, batch_size: 1, use_format: false,
+    audio_config: { format: "mp3", vocal_language: $("#lang").value, duration: +$("#dur").value } };
+  if (!inst && !lyrics) { body.sample_mode = true; body.messages = [{ role: "user", content: style }]; }
+  else body.messages = [{ role: "user", content: `<prompt>${style}</prompt>\n<lyrics>${inst ? "[Instrumental]" : lyrics}</lyrics>` }];
+
+  $("#go").disabled = true; $("#out").hidden = true;
+  let t0 = Date.now(); clearInterval(timer);
+  timer = setInterval(() => msg(`در حال ساخت… ${Math.round((Date.now() - t0) / 1000)} ثانیه (معمولاً ۱ تا ۳ دقیقه)`), 1000);
+  const ctl = new AbortController(); const kill = setTimeout(() => ctl.abort(), 12 * 60 * 1000);
+  try {
+    const r = await fetch(API, { method: "POST", signal: ctl.signal, body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key } });
+    const txt = await r.text();
+    if (!r.ok) throw new Error(`خطای سرور (${r.status}):\n${txt.slice(0, 300)}`);
+    const m = JSON.parse(txt).choices?.[0]?.message, url = m?.audio?.[0]?.audio_url?.url;
+    if (!url) throw new Error("جواب سرور فایل صوتی نداشت:\n" + txt.slice(0, 300));
+    const blob = await (await fetch(url)).blob(), obj = URL.createObjectURL(blob);
+    $("#player").src = obj; $("#dlmp3").href = obj;
+    $("#dlmp3").download = ($("#title").value.trim() || "song") + ".mp3";
+    const info = typeof m.content === "string" ? m.content.trim() : "";
+    $("#info").hidden = !info; $("#infotxt").textContent = info;
+    await drawCover($("#title").value + style);
+    $("#out").hidden = false; msg("✓ آماده شد.");
+  } catch (e) {
+    const net = e.name === "TypeError" || e.name === "AbortError";
+    msg(net ? "به سرور ACE Music وصل نشدم (قطعی سرویس، فیلتر یا زمان‌بر شدن). دوباره امتحان کن." : e.message, true);
+  } finally { clearInterval(timer); clearTimeout(kill); $("#go").disabled = false; }
+};
+
+$("#dlcover").onclick = () => $("#cover").toBlob(b => {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(b);
+  a.download = ($("#title").value.trim() || "cover") + ".png"; a.click();
+}, "image/png");
+</script>
+</body>
+</html>
